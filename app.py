@@ -7,7 +7,7 @@ import logging
 import pymongo
 logging.basicConfig(filename="scrapper.log" , level=logging.INFO)
 
-client = pymongo.MongoClient("mongodb+srv://ommundlik:omkarmundlik@cluster0.mzrghc0.mongodb.net/?retryWrites=true&w=majority")
+client = pymongo.MongoClient("mongodb+srv://<username>:<password>@cluster0.mzrghc0.mongodb.net/?retryWrites=true&w=majority")
 
 db = client["FlipCartWebscrapping"]
 
