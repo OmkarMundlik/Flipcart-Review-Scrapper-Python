@@ -4,83 +4,95 @@ import requests
 from bs4 import BeautifulSoup as bs
 from urllib.request import urlopen as uReq
 import logging
+import pymongo
 logging.basicConfig(filename="scrapper.log" , level=logging.INFO)
 
+client = pymongo.MongoClient("mongodb+srv://ommundlik:omkarmundlik@cluster0.mzrghc0.mongodb.net/?retryWrites=true&w=majority")
+
+db = client["FlipCartWebscrapping"]
+
+collection1 = db["all_reviews"]
 app = Flask(__name__)
 
-@app.route("/", methods = ['GET'])
-def homepage():
+
+
+@app.route("/", methods = ["GET"])
+def home():
     return render_template("index.html")
 
-@app.route("/review" , methods = ['POST' , 'GET'])
-def index():
-    if request.method == 'POST':
-        try:
-            searchString = request.form['content'].replace(" ","")
-            flipkart_url = "https://www.flipkart.com/search?q=" + searchString
-            uClient = uReq(flipkart_url)
-            flipkartPage = uClient.read()
-            uClient.close()
-            flipkart_html = bs(flipkartPage, "html.parser")
-            bigboxes = flipkart_html.findAll("div", {"class": "_1AtVbE col-12-12"})
-            del bigboxes[0:3]
-            box = bigboxes[0]
-            productLink = "https://www.flipkart.com" + box.div.div.div.a['href']
-            prodRes = requests.get(productLink)
-            prodRes.encoding='utf-8'
-            prod_html = bs(prodRes.text, "html.parser")
-            print(prod_html)
-            commentboxes = prod_html.find_all('div', {'class': "_16PBlm"})
+@app.route("/review", methods=["POST" , "GET"] )
+def Review():
+    if request.method=="POST" :
+        try :
+            searchString = request.form["content"].replace(" ", "")
+            logging.info(searchString)
+            flipcart_url = "https://www.flipkart.com/search?q=" + searchString
 
-            filename = searchString + ".csv"
-            fw = open(filename, "w")
-            headers = "Product, Customer Name, Rating, Heading, Comment \n"
-            fw.write(headers)
+            flipcart_url = uReq(flipcart_url)
+
+            flipcart_html = bs(flipcart_url, "html.parser")
+
+            big_boxes = flipcart_html.find_all("div", {"class" : "_1AtVbE col-12-12"})
+
+            del big_boxes[0:3]
+            # del big_boxes[23:]
+
+            product_link = "https://www.flipkart.com" + big_boxes[0].div.div.div.a['href']
+            logging.info(product_link)
+            open_product = requests.get(product_link)
+            open_product.encoding = 'utf-8'
+            open_html = bs(open_product.text, "html.parser")
+
+            comment_boxes = open_html.findAll("div", {"class" : "_16PBlm"})
             reviews = []
-            for commentbox in commentboxes:
-                try:
-                    #name.encode(encoding='utf-8')
-                    name = commentbox.div.div.find_all('p', {'class': '_2sc7ZR _2V5EHH'})[0].text
-
-                except:
-                    logging.info("name")
-
-                try:
-                    #rating.encode(encoding='utf-8')
-                    rating = commentbox.div.div.div.div.text
-
-
-                except:
-                    rating = 'No Rating'
-                    logging.info("rating")
-
-                try:
-                    #commentHead.encode(encoding='utf-8')
-                    commentHead = commentbox.div.div.div.p.text
-
-                except:
-                    commentHead = 'No Comment Heading'
-                    logging.info(commentHead)
-                try:
-                    comtag = commentbox.div.div.find_all('div', {'class': ''})
-                    #custComment.encode(encoding='utf-8')
-                    custComment = comtag[0].div.text
+            for comment in comment_boxes:
+                try :
+                    product = searchString
+                    logging.info(product)
                 except Exception as e:
-                    logging.info(e)
+                    logging.error("product ka error ")
+                    logging.error(e)
+
+                try :
+                    commentHead= comment.div.div.div.p.text
+                except Exception as e:
+                    commentHead = "No Head"
+                    logging.error("commenthead")
+                try :
+                    name= comment.div.div.find_all("p", {"class" : "_2sc7ZR _2V5EHH"})[0].text
+                except Exception as e:
+                    name = "No Name"
+                    logging.error("name ka error")
+                    logging.error(e)
+
+                try :
+                    rating=  comment.div.div.div.div.text
+                except Exception as e:
+                    rating = "No Ratings"
+                    logging.error(e)
+                try:
+                    custComment = comment.div.div.find_all("div" , {"class" : "t-ZTKy"})[0].div.div.text
+                except Exception as e:
+                    custComment = "No Comment"
+                    logging.info("descript error")
 
                 mydict = {"Product": searchString, "Name": name, "Rating": rating, "CommentHead": commentHead,
                           "Comment": custComment}
                 reviews.append(mydict)
-            logging.info("log my final result {}".format(reviews))
-            return render_template('result.html', reviews=reviews[0:(len(reviews)-1)])
+
+            try:
+                collection1.insert_many(reviews)
+            except Exception as e:
+                logging.info("mongo error : " )
+                logging.error(e)
+            logging.info(f"logging my final reviews {reviews}")
+            # logging.info(reviews)
+            return render_template("result.html", reviews=reviews[0:(len(reviews)-1)])
         except Exception as e:
             logging.info(e)
-            return 'something is wrong'
-    # return render_template('results.html')
+            return ("Something went wrong ")
 
     else:
-        return render_template('index.html')
-
-
-if __name__=="__main__":
+        return render_template("index.html")
+if(__name__ == '__main__'):
     app.run(host="0.0.0.0")
